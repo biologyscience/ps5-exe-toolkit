@@ -1,0 +1,1 @@
+A simple GUI that unwraps SELF contained files extracted from FPKG and generates a native windows executable using [Relinker from AnyPS5](https://github.com/boykopovar/AnyPS5)
