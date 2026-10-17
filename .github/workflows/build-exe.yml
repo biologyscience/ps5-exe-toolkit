@@ -26,10 +26,15 @@ jobs:
       - name: Build executable
         run: python -m PyInstaller --noconfirm --clean "PS5 EXE Toolkit.spec"
 
+      - name: Generate build timestamp
+        shell: bash
+        run: |
+          echo "BUILD_TIMESTAMP=$(date -u +'%Y-%m-%d_%H-%M_UTC')" >> "$GITHUB_ENV"
+
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
-          name: PS5-EXE-Toolkit-windows
+          name: PS5-EXE-Toolkit-windows_${{ env.BUILD_TIMESTAMP }}
           path: dist/PS5 EXE Toolkit.exe
           if-no-files-found: error
 
@@ -38,7 +43,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: commit-${{ github.sha }}
-          name: PS5 EXE Toolkit ${{ github.sha }}
+          name: PS5 EXE Toolkit [Build ${{ env.BUILD_TIMESTAMP }}]
           target_commitish: ${{ github.sha }}
-          generate_release_notes: true
           files: dist/PS5 EXE Toolkit.exe
