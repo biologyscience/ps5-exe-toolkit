@@ -14,11 +14,13 @@ import zipfile
 import struct
 from pathlib import PurePosixPath
 
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+
 if getattr(sys, "frozen", False):
     APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
 else:
     APP_DIR = os.path.dirname(os.path.abspath(__file__))
-HTML_FILE = os.path.join(getattr(sys, "_MEIPASS", APP_DIR), "index.html")
 STATE_FILE = os.path.join(APP_DIR, ".state.json")
 
 MAGICS = {0x1D3D154F: "PS4", 0xEEF51454: "PS5"}
@@ -419,6 +421,7 @@ def update_gui(log):
                 "}\n"
                 "try {\n"
                 "  Move-Item -LiteralPath $UpdatePath -Destination $TargetPath -Force\n"
+                "  $env:PYINSTALLER_RESET_ENVIRONMENT = '1'\n"
                 "  Start-Process -FilePath $TargetPath\n"
                 "} catch {\n"
                 "  $_ | Out-String | Set-Content -LiteralPath $ErrorPath -Encoding UTF8\n"
@@ -447,12 +450,12 @@ def update_gui(log):
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            creationflags=subprocess.DETACHED_PROCESS,
+            creationflags=subprocess.CREATE_NO_WINDOW,
             close_fds=True,
         )
-        runner.restart_requested = True
+        with runner.lock:
+            runner.restart_requested = True
         log(f"GUI build {tag} downloaded. Restarting to install the update...")
-        _window.destroy()
     except Exception as e:
         for path in (update_path, update_temp_path):
             if os.path.exists(path):
@@ -549,9 +552,6 @@ def build_exe(folder, enabled):
     shutil.copytree(libs_source, libs_destination)
     print("Copied libs/ beside app0/")
 
-
-
-_window = None
 
 
 def load_state():
@@ -774,107 +774,413 @@ def run_cmd(args, cwd=None):
     return code
 
 
-class Api:
-    def get_state(self):
-        return dict(load_state(), build_options=[{"id": o["id"], "label": o["label"]} for o in BUILD_OPTIONS])
+class ToolkitApp:
+    def __init__(self, root):
+        self.root = root
+        self.state = load_state()
+        self.folder = tk.StringVar(value=self.state["folder"])
+        self.option_vars = {}
+        self.save_timer = None
+        self.run_id = -1
+        self.log_index = 0
+        self.last_status = None
+        self.closed = False
 
-    def set_state(self, folder, options):
-        save_state(folder, options)
+        self._configure_window()
+        self._build_ui()
+        self.folder.trace_add("write", self._folder_changed)
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
+        self.root.bind(
+            "<Map>",
+            lambda _event: self.root.after_idle(self._disable_manual_resize),
+            add="+",
+        )
+        self._validate_folder()
+        self._poll_runner()
+
+        if not os.path.isdir(os.path.join(APP_DIR, "tools")):
+            error = runner.start_update()
+            if error:
+                self._append(f"Could not start Relinker setup: {error}\n", "err")
+        if os.path.isfile(GUI_UPDATE_ERROR_FILE):
+            with open(GUI_UPDATE_ERROR_FILE, encoding="utf-8") as error_file:
+                update_error = error_file.read().strip()
+            os.remove(GUI_UPDATE_ERROR_FILE)
+            if update_error:
+                self._append(f"GUI update failed: {update_error}\n", "err")
+
+    def _configure_window(self):
+        style = ttk.Style(self.root)
+        style.theme_use("clam")
+
+        screen_width = self.root.winfo_screenwidth()
+        width = 1200
+        height = 900
+        x = max(0, (screen_width - width) // 2)
+        y = max(0, (self.root.winfo_screenheight() - height) // 2)
+
+        self.root.title("PS5 EXE Toolkit")
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
+        self.root.configure(background="#20242c")
+
+        style.configure(".", font=("Segoe UI", 10))
+        style.configure("TFrame", background="#20242c")
+        style.configure("Card.TFrame", background="#292e38", borderwidth=1,
+                        relief="solid", bordercolor="#3b424e")
+        style.configure("TLabel", background="#20242c", foreground="#e6e9ef")
+        style.configure("Card.TLabel", background="#292e38", foreground="#e6e9ef")
+        style.configure("Title.TLabel", font=("Segoe UI Semibold", 23), foreground="#f0f2f6")
+        style.configure("Subtitle.TLabel", foreground="#a3acba")
+        style.configure("Brand.TLabel", background="#4c609e", foreground="#f3f5fb",
+                        font=("Segoe UI Semibold", 13), padding=(13, 9))
+        style.configure("Section.TLabel", background="#292e38", foreground="#e6e9ef",
+                        font=("Segoe UI Semibold", 12))
+        style.configure("Hint.TLabel", background="#292e38", foreground="#a3acba")
+        style.configure("TButton", padding=(13, 8), background="#343a46", foreground="#e3e7ee",
+                        bordercolor="#4a5260", lightcolor="#343a46", darkcolor="#343a46")
+        style.map("TButton", background=[("disabled", "#2b3039"), ("active", "#414958")],
+                  foreground=[("disabled", "#7e8795")])
+        style.configure("Primary.TButton", padding=(19, 10), background="#5269aa",
+                        foreground="#ffffff", bordercolor="#5269aa",
+                        font=("Segoe UI Semibold", 10))
+        style.map("Primary.TButton", background=[("disabled", "#3b4664"), ("active", "#6078ba")],
+                  foreground=[("disabled", "#ffffff")])
+        style.configure("Stop.TButton", padding=(14, 9), background="#493638",
+                        foreground="#f0b5b0", bordercolor="#68474a")
+        style.map("Stop.TButton", background=[("disabled", "#303139"), ("active", "#5a3e41")],
+                  foreground=[("disabled", "#848894")])
+        style.configure("Status.TLabel", background="#343d53", foreground="#c2cff8",
+                        font=("Segoe UI Semibold", 10), padding=(12, 7))
+        style.configure("TCheckbutton", background="#292e38", foreground="#d8dde6")
+        style.map("TCheckbutton", background=[("active", "#292e38")],
+                  foreground=[("disabled", "#7e8795")])
+        style.configure("Valid.TEntry", fieldbackground="#2d4039", foreground="#b9e4ca")
+        style.configure("Invalid.TEntry", fieldbackground="#493638", foreground="#f0b5b0")
+        style.configure("Default.TEntry", fieldbackground="#232832", foreground="#e3e7ee")
+
+    def _build_ui(self):
+        page = ttk.Frame(self.root, padding=(30, 26, 30, 26))
+        page.pack(fill="both", expand=True)
+        page.columnconfigure(0, weight=1)
+        page.rowconfigure(3, weight=1)
+
+        header = ttk.Frame(page)
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 22))
+        header.columnconfigure(1, weight=1)
+        ttk.Label(header, text="PS5", style="Brand.TLabel").grid(
+            row=0, column=0, rowspan=2, sticky="nw", padx=(0, 15)
+        )
+        ttk.Label(header, text="EXE Toolkit", style="Title.TLabel").grid(
+            row=0, column=1, sticky="sw"
+        )
+        ttk.Label(
+            header,
+            text="Unpack SELF files and build Windows executables",
+            style="Subtitle.TLabel",
+        ).grid(row=1, column=1, sticky="nw", pady=(2, 0))
+        updates = ttk.Frame(header)
+        updates.grid(row=0, column=2, rowspan=2, sticky="e", padx=(20, 0))
+        self.gui_update_button = ttk.Button(
+            updates, text="Check for GUI Updates", command=self.check_gui_updates
+        )
+        self.gui_update_button.pack(side="left", padx=(0, 8))
+        self.relinker_update_button = ttk.Button(
+            updates, text="Check for Relinker Updates", command=self.check_relinker_updates
+        )
+        self.relinker_update_button.pack(side="left")
+
+        folder_panel = ttk.Frame(page, style="Card.TFrame", padding=(22, 19))
+        folder_panel.grid(row=1, column=0, sticky="ew", pady=(0, 17))
+        folder_panel.columnconfigure(0, weight=1)
+        ttk.Label(folder_panel, text="Input folder", style="Section.TLabel").grid(
+            row=0, column=0, columnspan=2, sticky="w"
+        )
+        ttk.Label(
+            folder_panel,
+            text="Select the game folder that contains eboot.bin, sce_module, and sce_sys.",
+            style="Hint.TLabel",
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 15))
+        self.folder_entry = ttk.Entry(
+            folder_panel,
+            textvariable=self.folder,
+            font=("Cascadia Mono", 10),
+            style="Default.TEntry",
+        )
+        self.folder_entry.grid(row=2, column=0, sticky="ew", padx=(0, 10), ipady=5)
+        ttk.Button(folder_panel, text="Browse…", command=self.pick_folder).grid(
+            row=2, column=1, sticky="ew"
+        )
+        options = ttk.Frame(folder_panel)
+        options.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(15, 0))
+        ttk.Label(options, text="Build options", style="Hint.TLabel").pack(
+            side="left", padx=(0, 18)
+        )
+        for option in BUILD_OPTIONS:
+            variable = tk.BooleanVar(value=self.state["options"][option["id"]])
+            self.option_vars[option["id"]] = variable
+            ttk.Checkbutton(
+                options,
+                text=option["label"],
+                variable=variable,
+                command=self._schedule_save,
+            ).pack(side="left", padx=(0, 12))
+
+        actions = ttk.Frame(page, style="Card.TFrame", padding=(20, 15))
+        actions.grid(row=2, column=0, sticky="ew", pady=(0, 17))
+        actions.columnconfigure(0, weight=1)
+        ttk.Label(actions, text="Actions", style="Section.TLabel").grid(
+            row=0, column=0, sticky="w", padx=(0, 12)
+        )
+        self.status_label = ttk.Label(actions, text="Idle", style="Status.TLabel")
+        self.status_label.grid(row=0, column=1, sticky="e", padx=(0, 15))
+        self.run_button = ttk.Button(
+            actions, text="UnSELF", style="Primary.TButton", command=self.start_run
+        )
+        self.run_button.grid(row=0, column=2, padx=(0, 8))
+        self.build_button = ttk.Button(
+            actions, text="Build .exe", style="Primary.TButton", command=self.start_build
+        )
+        self.build_button.grid(row=0, column=3, padx=(0, 8))
+        self.stop_button = ttk.Button(
+            actions, text="Stop", style="Stop.TButton", command=runner.stop, state="disabled"
+        )
+        self.stop_button.grid(row=0, column=4)
+
+        output_panel = ttk.Frame(page, style="Card.TFrame", padding=(20, 17))
+        output_panel.grid(row=3, column=0, sticky="nsew")
+        output_panel.rowconfigure(1, weight=1)
+        output_panel.columnconfigure(0, weight=1)
+        output_heading = ttk.Frame(output_panel, style="Card.TFrame")
+        output_heading.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 12))
+        output_heading.columnconfigure(0, weight=1)
+        ttk.Label(output_heading, text="Logs", style="Section.TLabel").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Button(
+            output_heading, text="Clear logs", command=self.clear_output
+        ).grid(row=0, column=1, sticky="e")
+        self.output = tk.Text(
+            output_panel,
+            wrap="word",
+            height=10,
+            padx=15,
+            pady=13,
+            relief="flat",
+            borderwidth=0,
+            background="#232832",
+            foreground="#d9dee7",
+            insertbackground="#d9dee7",
+            selectbackground="#5269aa",
+            selectforeground="#ffffff",
+            font=("Cascadia Mono", 10),
+            state="disabled",
+        )
+        self.output.tag_configure("default", foreground="#d9dee7")
+        self.output.tag_configure("cmd", foreground="#a8b9f0")
+        self.output.tag_configure("err", foreground="#f0aaa5")
+        self.output.tag_configure("ok", foreground="#a6d8b5")
+        self.output.tag_configure("warn", foreground="#e5c28b")
+        self.output.tag_configure("muted", foreground="#a3acba")
+        output_scroll = ttk.Scrollbar(output_panel, orient="vertical", command=self.output.yview)
+        self.output.configure(yscrollcommand=output_scroll.set)
+        self.output.grid(row=1, column=0, sticky="nsew")
+        output_scroll.grid(row=1, column=1, sticky="ns")
+    def _disable_manual_resize(self):
+        if sys.platform != "win32":
+            self.root.resizable(False, False)
+            return
+
+        user32 = ctypes.windll.user32
+        hwnd = ctypes.c_void_p(int(self.root.tk.call("wm", "frame", self.root._w), 0))
+        get_window_long = getattr(user32, "GetWindowLongPtrW", user32.GetWindowLongW)
+        set_window_long = getattr(user32, "SetWindowLongPtrW", user32.SetWindowLongW)
+        get_window_long.argtypes = (ctypes.c_void_p, ctypes.c_int)
+        get_window_long.restype = ctypes.c_ssize_t
+        set_window_long.argtypes = (ctypes.c_void_p, ctypes.c_int, ctypes.c_ssize_t)
+        set_window_long.restype = ctypes.c_ssize_t
+        user32.SetWindowPos.argtypes = (
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_uint,
+        )
+        user32.SetWindowPos.restype = ctypes.c_int
+
+        style = get_window_long(hwnd, -16)
+        style = (style & ~0x00040000) | 0x00010000
+        if not set_window_long(hwnd, -16, style):
+            raise ctypes.WinError()
+        if not user32.SetWindowPos(
+            hwnd,
+            None,
+            0,
+            0,
+            0,
+            0,
+            0x0001 | 0x0002 | 0x0004 | 0x0020,
+        ):
+            raise ctypes.WinError()
+
+    def _get_options(self):
+        return {name: variable.get() for name, variable in self.option_vars.items()}
+
+    def _folder_changed(self, *_args):
+        self._validate_folder()
+        self._schedule_save()
+
+    def _validate_folder(self):
+        path = self.folder.get().strip()
+        if not path:
+            style = "Default.TEntry"
+        else:
+            valid = (
+                os.path.isfile(os.path.join(path, "eboot.bin"))
+                and os.path.isdir(os.path.join(path, "sce_module"))
+                and os.path.isdir(os.path.join(path, "sce_sys"))
+            )
+            style = "Valid.TEntry" if valid else "Invalid.TEntry"
+        self.folder_entry.configure(style=style)
+
+    def _schedule_save(self):
+        if self.save_timer is not None:
+            self.root.after_cancel(self.save_timer)
+        self.save_timer = self.root.after(
+            300, lambda: save_state(self.folder.get(), self._get_options())
+        )
+
+    def pick_folder(self):
+        initial = self.folder.get().strip()
+        if not os.path.isdir(initial):
+            initial = APP_DIR
+        selected = filedialog.askdirectory(
+            parent=self.root,
+            title="Select PS5 game folder",
+            initialdir=initial,
+            mustexist=True,
+        )
+        if selected:
+            self.folder.set(selected)
+
+    def _append(self, text, tag=None):
+        self.output.configure(state="normal")
+        self.output.insert("end", text, tag or ())
+        self.output.see("end")
+        self.output.configure(state="disabled")
+
+    def clear_output(self):
+        self.output.configure(state="normal")
+        self.output.delete("1.0", "end")
+        self.output.configure(state="disabled")
+
+    def start_run(self):
+        save_state(self.folder.get(), self._get_options())
+        error = runner.start(self.folder.get())
+        if error:
+            self._append(error + "\n", "warn")
+
+    def start_build(self):
+        save_state(self.folder.get(), self._get_options())
+        error = runner.start_build(self.folder.get(), self._get_options())
+        if error:
+            self._append(error + "\n", "warn")
 
     def check_relinker_updates(self):
         error = runner.start_update()
-        return {"ok": error is None, "error": error}
+        if error:
+            self._append(error + "\n", "warn")
 
     def check_gui_updates(self):
+        if not messagebox.askyesno(
+            "Check for GUI updates",
+            "Check for a new GUI build? If one is available, it will be installed and the app will restart.",
+            parent=self.root,
+        ):
+            return
         error = runner.start_gui_update()
-        return {"ok": error is None, "error": error}
+        if error:
+            self._append(error + "\n", "warn")
 
-    def pick_folder(self):
-        import webview
-
-        kind = webview.FileDialog.FOLDER if hasattr(webview, "FileDialog") else webview.FOLDER_DIALOG
-        result = _window.create_file_dialog(kind)
-        return result[0] if result else ""
-
-    def list_folder(self, path):
-        """One level only: the files and folders directly inside `path`."""
-        limit = 500
-        try:
-            with os.scandir(path) as it:
-                entries = sorted(it, key=lambda e: (not e.is_dir(), e.name.lower()))
-            items = []
-            for e in entries[:limit]:
-                is_dir = e.is_dir()
-                try:
-                    size = None if is_dir else e.stat().st_size
-                except OSError:
-                    size = None
-                items.append({"name": e.name, "is_dir": is_dir, "size": size})
-            return {"ok": True, "items": items, "total": len(entries)}
-        except FileNotFoundError:
-            return {"ok": False, "error": "Folder not found."}
-        except NotADirectoryError:
-            return {"ok": False, "error": "That path is not a folder."}
-        except PermissionError:
-            return {"ok": False, "error": "Permission denied."}
-        except OSError as e:
-            return {"ok": False, "error": str(e)}
-
-    def run(self, folder):
-        save_state(folder)
-        err = runner.start(folder)
-        return {"ok": err is None, "error": err}
-
-    def build(self, folder, options):
-        save_state(folder, options)
-        err = runner.start_build(folder, options)
-        return {"ok": err is None, "error": err}
-
-    def stop(self):
-        runner.stop()
-
-    def poll(self, run, since):
+    def _poll_runner(self):
+        if self.closed:
+            return
         with runner.lock:
-            reset = run != runner.run_id
-            start = 0 if reset else since
+            reset = self.run_id != runner.run_id
+            start = 0 if reset else self.log_index
             entries = runner.log[start:]
-            return {
-                "html": os.path.getmtime(HTML_FILE) if os.path.exists(HTML_FILE) else 0,
-                "run": runner.run_id,
-                "reset": reset,
-                "entries": entries,
-                "next": start + len(entries),
-                "status": runner.status,
-                "code": runner.code,
+            self.run_id = runner.run_id
+            self.log_index = start + len(entries)
+            status = runner.status
+            code = runner.code
+            restart_requested = runner.restart_requested
+
+        if reset and entries:
+            self.clear_output()
+        for entry in entries:
+            self._append(entry["s"], entry["t"])
+
+        labels = {
+            "idle": "Idle",
+            "running": "Working…",
+            "done": "Done",
+            "stopped": "Stopped",
+            "failed": f"Failed ({code})" if code is not None else "Failed",
+        }
+        if status != self.last_status:
+            status_colors = {
+                "idle": ("#343d53", "#c2cff8"),
+                "running": ("#4a4031", "#ecd09b"),
+                "done": ("#30443a", "#b9e4c7"),
+                "stopped": ("#4a4031", "#ecd09b"),
+                "failed": ("#493638", "#f0b5b0"),
             }
+            background, foreground = status_colors.get(status, ("#343d53", "#c2cff8"))
+            ttk.Style(self.root).configure(
+                "Status.TLabel", background=background, foreground=foreground
+            )
+        self.status_label.configure(text=labels.get(status, status))
+        self.last_status = status
+        running = status == "running"
+        button_state = "disabled" if running else "normal"
+        for button in (
+            self.run_button,
+            self.build_button,
+            self.gui_update_button,
+            self.relinker_update_button,
+        ):
+            button.configure(state=button_state)
+        self.stop_button.configure(state="normal" if running else "disabled")
+
+        if restart_requested:
+            self.root.after_idle(self.root.destroy)
+            return
+        self.root.after(150, self._poll_runner)
+
+    def close(self):
+        self.closed = True
+        if not runner.restart_requested:
+            runner.stop()
+        self.root.destroy()
 
 
 def main():
-    global _window
-    try:
-        import webview
-    except ImportError:
-        sys.exit("pywebview is not installed. Run:  pip install pywebview")
+    if sys.platform == "win32":
+        user32 = ctypes.windll.user32
+        try:
+            dpi_aware = user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+        except AttributeError:
+            dpi_aware = False
+        if not dpi_aware:
+            try:
+                ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            except AttributeError:
+                user32.SetProcessDPIAware()
 
-    _window = webview.create_window(
-        "PS5 EXE Toolkit",
-        HTML_FILE,
-        js_api=Api(),
-        width=760,
-        height=700,
-        min_size=(520, 420),
-    )
-    if not os.path.isdir(os.path.join(APP_DIR, "tools")):
-        error = runner.start_update()
-        if error:
-            runner.add(f"Could not start Relinker setup: {error}\n", "err")
-    if os.path.isfile(GUI_UPDATE_ERROR_FILE):
-        with open(GUI_UPDATE_ERROR_FILE, encoding="utf-8") as error_file:
-            update_error = error_file.read().strip()
-        os.remove(GUI_UPDATE_ERROR_FILE)
-        if update_error:
-            runner.add(f"GUI update failed: {update_error}\n", "err")
-    webview.start()
+    root = tk.Tk()
+    ToolkitApp(root)
+    root.mainloop()
     if not runner.restart_requested:
         runner.stop()
 
