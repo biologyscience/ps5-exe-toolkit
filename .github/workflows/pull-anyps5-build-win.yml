@@ -64,8 +64,8 @@ jobs:
         shell: cmd
         run: cmake --build build --target relinker libs --parallel
 
-      - name: Package
-        run: python tools/package_release.py --platform windows --build build --output dist --version manual
+      # - name: Package
+      #   run: python tools/package_release.py --platform windows --build build --output dist --version manual
 
       - name: Organize
         run: |
