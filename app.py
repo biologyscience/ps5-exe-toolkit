@@ -10,6 +10,7 @@ from PyQt6.QtGui import (
     QColor,
     QFont,
     QFontDatabase,
+    QIcon,
     QPainter,
     QPainterPath,
     QPen,
@@ -42,6 +43,7 @@ from util.updater import GUI_UPDATE_ERROR_FILE, update_gui
 STATE_FILE = os.path.join(APP_DIR, ".state.json")
 WINDOW_WIDTH = 1080
 WINDOW_HEIGHT = 720
+APP_ICON_FILE = "app-icon.png"
 UBUNTU_FONT_FILES = (
     "Ubuntu-Regular.ttf",
     "Ubuntu-Medium.ttf",
@@ -57,6 +59,11 @@ def _load_app_fonts(application):
         if QFontDatabase.addApplicationFont(font_path) < 0:
             raise RuntimeError(f"Could not load bundled font: {font_path}")
     application.setFont(QFont("Ubuntu", 10))
+
+
+def _app_icon_path():
+    bundle_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(bundle_dir, "assets", APP_ICON_FILE)
 
 
 def load_state():
@@ -335,6 +342,9 @@ class ToolkitApp(QMainWindow):
     def _configure_window(self):
         self.setWindowTitle("PS5 EXE Toolkit")
         self.setObjectName("mainWindow")
+        icon = QIcon(_app_icon_path())
+        self.setWindowIcon(icon)
+        QApplication.instance().setWindowIcon(icon)
         self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
         screen = QApplication.primaryScreen()
         if screen:

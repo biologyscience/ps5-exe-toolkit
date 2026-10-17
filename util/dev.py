@@ -6,12 +6,12 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-TARGET = ROOT / "app.py"
+TARGET = ROOT / "../app.py"
 POLL_SECONDS = 0.5
 
 
 def snapshot():
-    sources = (ROOT / "app.py", *(ROOT / "util").glob("*.py"))
+    sources = (ROOT / "../app.py", *(ROOT / "util").glob("*.py"))
     return {path: path.stat().st_mtime for path in sources}
 
 

@@ -13,6 +13,9 @@ datas = [
         "UbuntuMono-Regular.ttf",
         "LICENCE.txt",
     )
+] + [
+    (os.path.join(SPECPATH, "assets", filename), "assets")
+    for filename in ("app-icon.png", "app-icon.svg")
 ]
 binaries = []
 hiddenimports = []
@@ -47,6 +50,7 @@ exe = EXE(
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
+    icon=os.path.join(SPECPATH, "assets", "app-icon.ico"),
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
