@@ -2,6 +2,7 @@ name: Build Windows executable
 
 on:
   push:
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -37,7 +38,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: commit-${{ github.sha }}
           name: PS5 EXE Toolkit [Build ${{ env.BUILD_TIMESTAMP }}]
