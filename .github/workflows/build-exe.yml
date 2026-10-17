@@ -12,7 +12,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -31,7 +31,7 @@ jobs:
           echo "BUILD_TIMESTAMP=$(date -u +'%Y-%m-%d_%H-%M_UTC')" >> "$GITHUB_ENV"
 
       - name: Upload executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: PS5-EXE-Toolkit-windows_${{ env.BUILD_TIMESTAMP }}
           path: dist/PS5 EXE Toolkit.exe
