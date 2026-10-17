@@ -2,8 +2,6 @@ name: Build Windows executable
 
 on:
   push:
-  pull_request:
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -39,7 +37,6 @@ jobs:
           if-no-files-found: error
 
       - name: Publish release
-        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: commit-${{ github.sha }}
