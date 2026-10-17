@@ -3,7 +3,7 @@ A simple GUI that unwraps SELF contained files extracted from FPKG and generates
 Go to the [latest release](https://github.com/biologyscience/ps5-exe-toolkit/releases/latest) and open the .exe to start using the GUI.
 
 First time launch:
-- Might warn you, that the app is unsafe. Simply because it lacks a signature. No harm.
+- Might warn you, that the app is unsafe. Simply because it lacks a signature. Click More Info and Run Anyway.
 - Tends to download [Relinker and Libs from AnyPS5](https://github.com/boykopovar/AnyPS5). Do not close the app while this is happpening.
 
-> Project vibe coded with claude.
+> Project vibe coded with Claude and Copilot.

@@ -1,12 +1,25 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-datas = []
+import os
+
+datas = [
+    (
+        os.path.join(SPECPATH, "assets", "fonts", filename),
+        os.path.join("assets", "fonts"),
+    )
+    for filename in (
+        "Ubuntu-Regular.ttf",
+        "Ubuntu-Medium.ttf",
+        "UbuntuMono-Regular.ttf",
+        "LICENCE.txt",
+    )
+]
 binaries = []
 hiddenimports = []
 
 
 a = Analysis(
-    ['gui.py'],
+    ['app.py'],
     pathex=[],
     binaries=binaries,
     datas=datas,

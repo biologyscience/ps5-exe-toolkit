@@ -1,4 +1,4 @@
-# Hot-reload for gui.py
+# Hot-reload for app.py
 
 import subprocess
 import sys
@@ -6,12 +6,13 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-TARGET = ROOT / "gui.py"
+TARGET = ROOT / "app.py"
 POLL_SECONDS = 0.5
 
 
 def snapshot():
-    return {p: p.stat().st_mtime for p in ROOT.glob("*.py") if p.name != "dev.py"}
+    sources = (ROOT / "app.py", *(ROOT / "util").glob("*.py"))
+    return {path: path.stat().st_mtime for path in sources}
 
 
 def start(first):

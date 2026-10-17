@@ -64,14 +64,12 @@ jobs:
         shell: cmd
         run: cmake --build build --target relinker libs --parallel
 
-      # - name: Package
-      #   run: python tools/package_release.py --platform windows --build build --output dist --version manual
-
       - name: Organize
         run: |
           mkdir -p out/libs
           cp build/core/relinker/relinker.exe out/relinker.exe
           cp build/core/libs/libs/*.prx out/libs/
+          cp build/core/libs/libs/*.dll out/libs/
           
       - name: Generate build timestamp
         shell: bash
@@ -81,7 +79,7 @@ jobs:
       - name: Zip relinker-and-libs
         shell: bash
         run: |
-          7z a "relinker-and-libs_${BUILD_TIMESTAMP}.zip" out
+          7z a "relinker-and-libs_${BUILD_TIMESTAMP}.zip" out/*
 
       - name: Upload ZIP as workflow artifact
         uses: actions/upload-artifact@v6
