@@ -114,7 +114,7 @@ def update_relinker(log):
         api_url,
         headers={
             "Accept": "application/vnd.github+json",
-            "User-Agent": "Folder-Runner",
+            "User-Agent": "PS5-EXE-TOOLKIT",
         },
     )
     try:
