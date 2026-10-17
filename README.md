@@ -1,6 +1,6 @@
 A simple GUI that unwraps SELF contained files extracted from FPKG and generates a native windows executable using [Relinker from AnyPS5](https://github.com/boykopovar/AnyPS5)
 
-Go to the latest release and open the .exe to start using the GUI.
+Go to the [latest release](https://github.com/biologyscience/ps5-exe-toolkit/releases/latest) and open the .exe to start using the GUI.
 
 First time launch:
 - Might warn you, that the app is unsafe. Simply because it lacks a signature. No harm.
