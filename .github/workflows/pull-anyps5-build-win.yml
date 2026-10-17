@@ -1,0 +1,100 @@
+name: Build AnyPS5 Tools
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  WINLIBS_RELEASE: 15.2.0posix-14.0.0-ucrt-r7
+  WINLIBS_ZIP: winlibs-x86_64-posix-seh-gcc-15.2.0-mingw-w64ucrt-14.0.0-r7.zip
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout AnyPS5
+        uses: actions/checkout@v6
+        with:
+          repository: boykopovar/AnyPS5
+          ref: main
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Point WinLibs CMake at the CA bundle of Git for Windows
+        run: |
+          for prefix in ucrt64 mingw64; do
+            bundle="C:/Program Files/Git/$prefix/etc/ssl/certs/ca-bundle.crt"
+            if [ -f "$bundle" ]; then
+              echo "SSL_CERT_FILE=$bundle" >> "$GITHUB_ENV"
+              exit 0
+            fi
+          done
+          echo "::error::No CA bundle found in Git for Windows"
+          exit 1
+
+      - id: toolchain
+        uses: actions/cache@v6
+        with:
+          path: C:\winlibs
+          key: ${{ env.WINLIBS_ZIP }}
+
+      - name: Download WinLibs
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/winlibs.zip" \
+            "https://github.com/brechtsanders/winlibs_mingw/releases/download/$WINLIBS_RELEASE/$WINLIBS_ZIP"
+          7z x "$RUNNER_TEMP/winlibs.zip" -oC:/winlibs
+
+      - name: Add compiler to PATH
+        run: echo 'C:\winlibs\mingw64\bin' >> "$GITHUB_PATH"
+
+      - name: Configure
+        shell: cmd
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+
+      - name: Build relinker and libraries
+        shell: cmd
+        run: cmake --build build --target relinker libs --parallel
+
+      - name: Package
+        run: python tools/package_release.py --platform windows --build build --output dist --version manual
+
+      - name: Organize
+        run: |
+          mkdir -p out/libs
+          cp build/core/relinker/relinker.exe out/relinker.exe
+          cp build/core/libs/libs/*.prx out/libs/
+          
+      - name: Generate build timestamp
+        shell: bash
+        run: |
+          echo "BUILD_TIMESTAMP=$(date -u +'%Y-%m-%d_%H-%M_UTC')" >> "$GITHUB_ENV"
+
+      - name: Zip relinker-and-libs
+        shell: bash
+        run: |
+          7z a "relinker-and-libs_${BUILD_TIMESTAMP}.zip" out
+
+      - name: Upload ZIP as workflow artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: relinker-and-libs_${{ env.BUILD_TIMESTAMP }}
+          path: relinker-and-libs_${{ env.BUILD_TIMESTAMP }}.zip
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Create GitHub Release and upload ZIP
+        uses: softprops/action-gh-release@v3
+        with:
+          prerelease: true
+          tag_name: relinker-and-libs_${{ env.BUILD_TIMESTAMP }}
+          name: AnyPS5 Tools [Windows Build ${{ env.BUILD_TIMESTAMP }}}
+          files: relinker-and-libs_${{ env.BUILD_TIMESTAMP }}.zip

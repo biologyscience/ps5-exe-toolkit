@@ -31,8 +31,8 @@
     font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
   }
   main { max-width: 760px; height: 100%; min-height: 0; margin: 0 auto; padding: clamp(16px, 6.8vh, 48px) 24px clamp(16px, 4.5vh, 32px); display: flex; flex-direction: column; gap: clamp(8px, 3vh, 24px); overflow: hidden; }
-  header { position: relative; padding-right: 230px; }
-  #check-updates { position: absolute; top: 0; right: 0; }
+  header { position: relative; padding-right: 360px; }
+  .update-buttons { position: absolute; top: 0; right: 0; display: flex; gap: 8px; }
   h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
   .sub { margin: 4px 0 0; color: var(--muted); }
   .folder-setup { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 24px; }
@@ -106,7 +106,7 @@
   @media (max-width: 600px) {
     main { padding: 24px 16px; }
     header { padding-right: 0; padding-top: 46px; }
-    #check-updates { left: 0; right: auto; }
+    .update-buttons { left: 0; right: auto; }
     .folder-setup { grid-template-columns: 1fr; gap: 12px; }
   }
 </style>
@@ -115,7 +115,10 @@
 <main>
   <header>
     <h1>PS5 EXE Toolkit</h1>
-    <button id="check-updates">Check for Relinker Updates</button>
+    <div class="update-buttons">
+      <button id="check-gui-updates">Check for GUI Updates</button>
+      <button id="check-relinker-updates">Check for Relinker Updates</button>
+    </div>
   </header>
 
   <section class="folder-setup">
@@ -258,7 +261,8 @@ function setStatus(s, code) {
   const running = s === "running";
   el.run.disabled = running;
   el.build.disabled = running;
-  $("#check-updates").disabled = running;
+  $("#check-gui-updates").disabled = running;
+  $("#check-relinker-updates").disabled = running;
   el.stop.hidden = !running;
 }
 
@@ -301,7 +305,7 @@ async function startBuild() {
 }
 
 async function checkRelinkerUpdates() {
-  const button = $("#check-updates");
+  const button = $("#check-relinker-updates");
   if (button.disabled) return;
   button.disabled = true;
   try {
@@ -312,6 +316,23 @@ async function checkRelinkerUpdates() {
     }
   } catch (e) {
     append([{ t: "err", s: `Relinker update failed: ${e}\n` }]);
+    button.disabled = el.status.dataset.s === "running";
+  }
+}
+
+async function checkGuiUpdates() {
+  const button = $("#check-gui-updates");
+  if (button.disabled) return;
+  if (!confirm("Check for a new GUI build? If one is available, it will be installed and the app will restart.")) return;
+  button.disabled = true;
+  try {
+    const res = await call("check_gui_updates");
+    if (!res.ok) {
+      append([{ t: "warn", s: res.error + "\n" }]);
+      button.disabled = el.status.dataset.s === "running";
+    }
+  } catch (e) {
+    append([{ t: "err", s: `GUI update failed: ${e}\n` }]);
     button.disabled = el.status.dataset.s === "running";
   }
 }
@@ -333,7 +354,8 @@ $("#pick-folder").onclick = async () => {
 };
 el.run.onclick = start;
 el.build.onclick = startBuild;
-$("#check-updates").onclick = checkRelinkerUpdates;
+$("#check-gui-updates").onclick = checkGuiUpdates;
+$("#check-relinker-updates").onclick = checkRelinkerUpdates;
 el.stop.onclick = () => call("stop");
 $("#clear").onclick = () => { el.log.textContent = ""; };
 addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") start(); });

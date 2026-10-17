@@ -6,6 +6,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import threading
 import traceback
 import urllib.request
@@ -86,6 +87,9 @@ def run_task(folder):
 
 
 PROGRAM = "tools/relinker.exe"
+GUI_RELEASE_API = "https://api.github.com/repos/biologyscience/ps5-exe-toolkit/releases/latest"
+GUI_RELEASE_ASSET = "PS5.EXE.Toolkit.exe"
+GUI_UPDATE_ERROR_FILE = os.path.join(APP_DIR, ".gui-update-error.txt")
 
 BUILD_OPTIONS = [
     {"id": "media", "label": "Include Media", "arg": ["--module-dir", "Media/Modules", "--module-dir", "Media/Plugins"], "default": True},
@@ -322,6 +326,142 @@ def update_relinker(log):
         raise CommandError(f"Relinker update failed: {e}") from e
 
 
+def update_gui(log):
+    if not getattr(sys, "frozen", False) or sys.platform != "win32":
+        raise CommandError("GUI updates are available only in the packaged Windows app.")
+
+    update_path = os.path.join(APP_DIR, f".{GUI_RELEASE_ASSET}.update")
+    update_temp_path = update_path + ".download"
+    helper_path = None
+    try:
+        log("Checking the latest GUI release...")
+        request = urllib.request.Request(
+            GUI_RELEASE_API,
+            headers={
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "PS5-EXE-Toolkit",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            release = json.load(response)
+        if not isinstance(release, dict):
+            raise ValueError("GitHub returned invalid release metadata.")
+
+        tag = release.get("tag_name")
+        assets = release.get("assets", [])
+        if not isinstance(tag, str) or not tag:
+            raise ValueError("GitHub release is missing its version tag.")
+        if not isinstance(assets, list):
+            raise ValueError("GitHub returned an invalid release asset list.")
+        asset = next(
+            (
+                item for item in assets
+                if isinstance(item, dict) and item.get("name") == GUI_RELEASE_ASSET
+            ),
+            None,
+        )
+        if asset is None or not asset.get("browser_download_url"):
+            raise ValueError(f"The latest release does not contain {GUI_RELEASE_ASSET}.")
+
+        digest = asset.get("digest")
+        installed_digest = None
+        if isinstance(digest, str) and digest.lower().startswith("sha256:"):
+            hasher = hashlib.sha256()
+            with open(sys.executable, "rb") as executable:
+                for chunk in iter(lambda: executable.read(1024 * 1024), b""):
+                    hasher.update(chunk)
+            installed_digest = "sha256:" + hasher.hexdigest()
+            if installed_digest.lower() == digest.lower():
+                log(f"Already running the latest GUI build ({tag}).")
+                return
+
+        download_release_asset(
+            asset["browser_download_url"],
+            update_path,
+            digest,
+            f"{GUI_RELEASE_ASSET} ({tag})",
+            log,
+        )
+        hasher = hashlib.sha256()
+        with open(update_path, "rb") as downloaded:
+            for chunk in iter(lambda: downloaded.read(1024 * 1024), b""):
+                hasher.update(chunk)
+        downloaded_digest = "sha256:" + hasher.hexdigest()
+        if installed_digest is None:
+            hasher = hashlib.sha256()
+            with open(sys.executable, "rb") as executable:
+                for chunk in iter(lambda: executable.read(1024 * 1024), b""):
+                    hasher.update(chunk)
+            installed_digest = "sha256:" + hasher.hexdigest()
+        if downloaded_digest == installed_digest:
+            os.remove(update_path)
+            log(f"Already running the latest GUI build ({tag}).")
+            return
+
+        powershell = shutil.which("powershell.exe")
+        if not powershell:
+            raise ValueError("Windows PowerShell was not found; the GUI cannot be restarted to install the update.")
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            suffix=".ps1",
+            prefix=".gui-update-",
+            dir=APP_DIR,
+            delete=False,
+        ) as helper:
+            helper_path = helper.name
+            helper.write(
+                "param([int]$ProcessId, [string]$UpdatePath, [string]$TargetPath, [string]$ErrorPath)\n"
+                "$ErrorActionPreference = 'Stop'\n"
+                "while ($true) {\n"
+                "  try { Get-Process -Id $ProcessId -ErrorAction Stop | Out-Null; Start-Sleep -Milliseconds 250 }\n"
+                "  catch { break }\n"
+                "}\n"
+                "try {\n"
+                "  Move-Item -LiteralPath $UpdatePath -Destination $TargetPath -Force\n"
+                "  Start-Process -FilePath $TargetPath\n"
+                "} catch {\n"
+                "  $_ | Out-String | Set-Content -LiteralPath $ErrorPath -Encoding UTF8\n"
+                "  if (Test-Path -LiteralPath $TargetPath) { Start-Process -FilePath $TargetPath }\n"
+                "} finally {\n"
+                "  Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue\n"
+                "}\n"
+            )
+
+        subprocess.Popen(
+            [
+                powershell,
+                "-NoProfile",
+                "-NonInteractive",
+                "-WindowStyle",
+                "Hidden",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                helper_path,
+                str(os.getpid()),
+                update_path,
+                sys.executable,
+                GUI_UPDATE_ERROR_FILE,
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.DETACHED_PROCESS,
+            close_fds=True,
+        )
+        runner.restart_requested = True
+        log(f"GUI build {tag} downloaded. Restarting to install the update...")
+        _window.destroy()
+    except Exception as e:
+        for path in (update_path, update_temp_path):
+            if os.path.exists(path):
+                os.remove(path)
+        if helper_path and os.path.exists(helper_path):
+            os.remove(helper_path)
+        raise CommandError(f"GUI update failed: {e}") from e
+
+
 def build_exe(folder, enabled):
     """enabled: set of BUILD_OPTIONS ids whose checkbox is ticked."""
     optional = []
@@ -486,6 +626,7 @@ class Runner:
         self.code = None
         self.child = None
         self.stop_requested = False
+        self.restart_requested = False
 
     def add(self, text, tag=None):
         with self.lock:
@@ -516,6 +657,10 @@ class Runner:
     def start_update(self):
         log = lambda message: self.add(message + "\n", "muted")
         return self._launch(update_relinker, (log,), "check_relinker_updates()")
+
+    def start_gui_update(self):
+        log = lambda message: self.add(message + "\n", "muted")
+        return self._launch(update_gui, (log,), "check_gui_updates()")
 
     def _launch(self, func, args, label):
         with self.lock:
@@ -640,6 +785,10 @@ class Api:
         error = runner.start_update()
         return {"ok": error is None, "error": error}
 
+    def check_gui_updates(self):
+        error = runner.start_gui_update()
+        return {"ok": error is None, "error": error}
+
     def pick_folder(self):
         import webview
 
@@ -719,8 +868,15 @@ def main():
         error = runner.start_update()
         if error:
             runner.add(f"Could not start Relinker setup: {error}\n", "err")
+    if os.path.isfile(GUI_UPDATE_ERROR_FILE):
+        with open(GUI_UPDATE_ERROR_FILE, encoding="utf-8") as error_file:
+            update_error = error_file.read().strip()
+        os.remove(GUI_UPDATE_ERROR_FILE)
+        if update_error:
+            runner.add(f"GUI update failed: {update_error}\n", "err")
     webview.start()
-    runner.stop()
+    if not runner.restart_requested:
+        runner.stop()
 
 
 if __name__ == "__main__":
