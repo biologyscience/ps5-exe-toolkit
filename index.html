@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PS5 EXE Toolkit</title>
+<style>
+  :root {
+    --bg: #fafafa; --surface: #ffffff; --border: #e4e4e7; --border-strong: #d4d4d8;
+    --text: #18181b; --muted: #71717a; --primary: #18181b; --primary-text: #fafafa;
+    --accent: #2563eb; --ok: #16a34a; --err: #dc2626; --warn: #d97706;
+    --log-bg: #ffffff; --ring: rgba(37, 99, 235, .25);
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #24272d; --surface: #30343c; --border: #414650; --border-strong: #555c68;
+      --text: #f1f3f5; --muted: #b0b7c2; --primary: #e2e6eb; --primary-text: #252930;
+      --accent: #8ab4f8; --ok: #81c995; --err: #f28b82; --warn: #fdd663;
+      --log-bg: #292d34; --ring: rgba(138, 180, 248, .35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body { user-select: none; -webkit-user-select: none; cursor: default; }
+  input, #log { user-select: text; -webkit-user-select: text; }
+  button { cursor: pointer; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  main { max-width: 760px; height: 100%; min-height: 0; margin: 0 auto; padding: clamp(16px, 6.8vh, 48px) 24px clamp(16px, 4.5vh, 32px); display: flex; flex-direction: column; gap: clamp(8px, 3vh, 24px); overflow: hidden; }
+  header { position: relative; padding-right: 230px; }
+  #check-updates { position: absolute; top: 0; right: 0; }
+  h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
+  .sub { margin: 4px 0 0; color: var(--muted); }
+  .folder-setup { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 24px; }
+  .folder-setup .sub { margin: 0; }
+  .folder-controls .options { margin-top: 14px; }
+
+  .field label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
+  .field + .field { margin-top: 16px; }
+  .row { display: flex; gap: 8px; }
+  input[type=text] {
+    flex: 1; min-width: 0; height: 38px; padding: 0 12px; font: 13px var(--mono);
+    color: var(--text); background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; outline: none; transition: border-color .15s, box-shadow .15s;
+  }
+  input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+  input::placeholder { color: var(--muted); opacity: .7; }
+
+  button {
+    height: 38px; padding: 0 14px; font: 500 13px var(--sans); color: var(--text); cursor: pointer;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    transition: background .15s, border-color .15s, opacity .15s, transform .05s;
+  }
+  button:hover:not(:disabled) { border-color: var(--border-strong); background: color-mix(in srgb, var(--text) 5%, var(--surface)); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary { background: var(--primary); color: var(--primary-text); border-color: var(--primary); padding: 0 20px; }
+  button.primary:hover:not(:disabled) { opacity: .88; background: var(--primary); border-color: var(--primary); }
+  button.danger { color: var(--err); }
+
+  .options { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; margin-top: 18px; }
+  .options .title { font-size: 12px; font-weight: 500; color: var(--muted); }
+  .check { position: relative; display: inline-flex; align-items: center; gap: 9px; font: 13px var(--mono); cursor: pointer; }
+  .check input { position: absolute; opacity: 0; pointer-events: none; }
+  .check .box { width: 18px; height: 18px; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 5px; transition: background .15s, border-color .15s, box-shadow .15s; }
+  .check .box::after { content: ""; width: 9px; height: 5px; border-left: 2px solid var(--primary-text); border-bottom: 2px solid var(--primary-text); transform: rotate(-45deg) translate(1px, -1px); opacity: 0; transition: opacity .1s; }
+  .check input:checked + .box { background: var(--primary); border-color: var(--primary); }
+  .check input:checked + .box::after { opacity: 1; }
+  .check input:focus-visible + .box { box-shadow: 0 0 0 3px var(--ring); }
+
+  .actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+  .spacer { display: none; }
+  .status { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; margin-right: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .status[data-s=running] .dot { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+  .status[data-s=done] .dot { background: var(--ok); }
+  .status[data-s=failed] .dot { background: var(--err); }
+  .status[data-s=stopped] .dot { background: var(--warn); }
+  @keyframes pulse { 50% { opacity: .35; transform: scale(.8); } }
+
+  .panel { display: flex; flex-direction: column; background: var(--log-bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  main > .panel:not(.files) { flex: 1 1 0; min-height: 0; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 500; color: var(--muted); }
+  .output-controls { display: inline-flex; align-items: center; gap: 12px; }
+  .output-controls .status { margin-right: 0; }
+  #log { flex: 1; min-height: 0; margin: 0; padding: 14px; overflow: auto; font: 12.5px/1.6 var(--mono); white-space: pre-wrap; word-break: break-word; }
+  #log .cmd { color: var(--accent); } #log .err { color: var(--err); }
+  #log .ok { color: var(--ok); } #log .warn { color: var(--warn); } #log .muted { color: var(--muted); }
+  .panel.files { flex: 0 1 196px; min-height: clamp(96px, 20vh, 196px); height: 196px; }
+  #files { flex: 1; list-style: none; margin: 0; padding: 4px; overflow: auto; }
+  #files li { display: flex; align-items: center; gap: 10px; padding: 5px 10px; border-radius: 6px; font-size: 13px; }
+  #files li:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+  #files .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #files .size { color: var(--muted); font: 12px var(--mono); }
+  #files svg { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  #files .dir svg { color: var(--accent); }
+  #files .file svg { color: var(--muted); }
+  #files .empty { display: block; padding: 28px 10px; text-align: center; color: var(--muted); }
+  #files .empty.error { color: var(--err); }
+  kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--border-strong); border-radius: 4px; }
+  @media (max-width: 600px) {
+    main { padding: 24px 16px; }
+    header { padding-right: 0; padding-top: 46px; }
+    #check-updates { left: 0; right: auto; }
+    .folder-setup { grid-template-columns: 1fr; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>PS5 EXE Toolkit</h1>
+    <button id="check-updates">Check for Relinker Updates</button>
+  </header>
+
+  <section class="folder-setup">
+    <p class="sub">Select a folder structured like:<br><br><code>FolderYouSelect/<br>&nbsp;&nbsp; eboot.bin<br>&nbsp;&nbsp; sce_module/<br>&nbsp;&nbsp; sce_sys/<br>&nbsp;&nbsp; others*</code></p>
+    <div class="folder-controls">
+      <div class="field">
+        <label for="folder">Folder</label>
+        <div class="row">
+          <input id="folder" type="text" placeholder="/path/to/folder" spellcheck="false" autocomplete="off">
+          <button id="pick-folder">Browse</button>
+        </div>
+      </div>
+      <div class="options" id="options"></div>
+    </div>
+  </section>
+
+  <section style="display: none;" class="panel files">
+    <div class="panel-head"><span>Contents</span><span id="files-count"></span></div>
+    <ul id="files"></ul>
+  </section>
+
+  <div class="actions">
+    <button id="run" class="primary">unSELF</button>
+    <button id="build" class="primary">Build .exe</button>
+    <button id="stop" class="danger" hidden>Stop</button>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head"><span>Output</span><span class="output-controls"><span id="status" class="status" data-s="idle"><span class="dot"></span><span id="status-text">Idle</span></span><button id="clear">Clear</button></span></div>
+    <pre id="log"><span class="muted">Ready. Choose a folder and press Run.</span></pre>
+  </section>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const el = { folder: $("#folder"), options: $("#options"), run: $("#run"), build: $("#build"), stop: $("#stop"),
+             files: $("#files"), filesCount: $("#files-count"),
+             log: $("#log"), status: $("#status"), statusText: $("#status-text") };
+let html = null, run = -1, since = 0, saveTimer = null, filesTimer = null, started = false, lastStatus = null;
+
+const call = (method, ...args) => window.pywebview.api[method](...args);
+
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => call("set_state", el.folder.value, getOptions()), 300);
+}
+
+const ICONS = {
+  dir: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  file: '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>',
+};
+
+function fmtSize(n) {
+  if (n == null) return "";
+  const u = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (i === 0 ? n : n.toFixed(n < 10 ? 1 : 0)) + " " + u[i];
+}
+
+function renderFiles(message, isError) {
+  el.files.textContent = "";
+  el.filesCount.textContent = "";
+  const li = document.createElement("li");
+  li.className = "empty" + (isError ? " error" : "");
+  li.textContent = message;
+  el.files.appendChild(li);
+}
+
+async function loadFiles() {
+  const path = el.folder.value.trim();
+  if (!path) return renderFiles("Select a folder to see what's inside.");
+  let d;
+  try { d = await call("list_folder", path); } catch (e) { return; }
+  if (el.folder.value.trim() !== path) return;
+  if (!d.ok) return renderFiles(d.error, true);
+  if (!d.items.length) return renderFiles("This folder is empty.");
+
+  el.files.textContent = "";
+  for (const it of d.items) {
+    const li = document.createElement("li");
+    li.className = it.is_dir ? "dir" : "file";
+    li.innerHTML = it.is_dir ? ICONS.dir : ICONS.file;
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = it.name;
+    name.title = it.name;
+    const size = document.createElement("span");
+    size.className = "size";
+    size.textContent = fmtSize(it.size);
+    li.append(name, size);
+    el.files.appendChild(li);
+  }
+  const more = d.total > d.items.length ? ` (showing ${d.items.length})` : "";
+  el.filesCount.textContent = `${d.total} item${d.total === 1 ? "" : "s"}${more}`;
+}
+
+function scheduleFiles() {
+  clearTimeout(filesTimer);
+  filesTimer = setTimeout(loadFiles, 300);
+}
+
+function renderOptions(list, values) {
+  el.options.textContent = "";
+  if (!list.length) return;
+  const title = document.createElement("span");
+  title.className = "title";
+  title.textContent = "Relinker options";
+  el.options.appendChild(title);
+  for (const o of list) {
+    const label = document.createElement("label");
+    label.className = "check";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.dataset.id = o.id;
+    input.checked = !!values[o.id];
+    input.addEventListener("change", scheduleSave);
+    const box = document.createElement("span");
+    box.className = "box";
+    const text = document.createElement("span");
+    text.textContent = o.label;
+    label.append(input, box, text);
+    el.options.appendChild(label);
+  }
+}
+
+function getOptions() {
+  const out = {};
+  el.options.querySelectorAll("input").forEach((i) => { out[i.dataset.id] = i.checked; });
+  return out;
+}
+
+function setStatus(s, code) {
+  const labels = { idle: "Idle", running: "Running", done: "Done", stopped: "Stopped",
+                   failed: code != null ? `Failed (${code})` : "Failed", reconnecting: "Reconnecting…" };
+  if (lastStatus === "running" && s !== "running" && s !== "reconnecting") loadFiles();
+  if (s !== "reconnecting") lastStatus = s;
+  el.status.dataset.s = s;
+  el.statusText.textContent = labels[s] || s;
+  const running = s === "running";
+  el.run.disabled = running;
+  el.build.disabled = running;
+  $("#check-updates").disabled = running;
+  el.stop.hidden = !running;
+}
+
+function append(entries) {
+  if (!entries.length) return;
+  for (const e of entries) {
+    const span = document.createElement("span");
+    if (e.t) span.className = e.t;
+    span.textContent = e.s;
+    el.log.appendChild(span);
+  }
+  el.log.scrollTop = el.log.scrollHeight;
+}
+
+async function poll() {
+  try {
+    const d = await call("poll", run, since);
+    if (html && d.html !== html) return location.reload();
+    html = d.html;
+    if (d.reset) { if (run !== -1 || d.entries.length) el.log.textContent = ""; run = d.run; }
+    append(d.entries);
+    since = d.next;
+    setStatus(d.status, d.code);
+  } catch (e) {
+    setStatus("reconnecting");
+  }
+  setTimeout(poll, 200);
+}
+
+async function start() {
+  if (el.run.disabled) return;
+  const res = await call("run", el.folder.value);
+  if (!res.ok) append([{ t: "warn", s: res.error + "\n" }]);
+}
+
+async function startBuild() {
+  if (el.build.disabled) return;
+  const res = await call("build", el.folder.value, getOptions());
+  if (!res.ok) append([{ t: "warn", s: res.error + "\n" }]);
+}
+
+async function checkRelinkerUpdates() {
+  const button = $("#check-updates");
+  if (button.disabled) return;
+  button.disabled = true;
+  try {
+    const res = await call("check_relinker_updates");
+    if (!res.ok) {
+      append([{ t: "warn", s: res.error + "\n" }]);
+      button.disabled = el.status.dataset.s === "running";
+    }
+  } catch (e) {
+    append([{ t: "err", s: `Relinker update failed: ${e}\n` }]);
+    button.disabled = el.status.dataset.s === "running";
+  }
+}
+
+async function init() {
+  if (started) return;
+  started = true;
+  const s = await call("get_state");
+  el.folder.value = s.folder;
+  renderOptions(s.build_options, s.options);
+  loadFiles();
+  poll();
+}
+
+el.folder.addEventListener("input", () => { scheduleSave(); scheduleFiles(); });
+$("#pick-folder").onclick = async () => {
+  const path = await call("pick_folder");
+  if (path) { el.folder.value = path; scheduleSave(); loadFiles(); }
+};
+el.run.onclick = start;
+el.build.onclick = startBuild;
+$("#check-updates").onclick = checkRelinkerUpdates;
+el.stop.onclick = () => call("stop");
+$("#clear").onclick = () => { el.log.textContent = ""; };
+addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") start(); });
+
+if (window.pywebview && window.pywebview.api) init();
+else addEventListener("pywebviewready", init);
+</script>
+</body>
+</html>
