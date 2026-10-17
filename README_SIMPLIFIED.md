@@ -4,7 +4,11 @@
 
 1. Extract the `.pkg` to a folder. This folder must contain a file named `eboot.bin` and two folders `sce_module/`, `sce_sys/`.
 
-There are multiple ways you can extract a .pkg to a folder. I will not list them here, a simple google search should help you.
+<details>
+<summary>There are multiple ways you can extract a .pkg to a folder. I will not list them here, a simple google search should help you.</summary>
+Well, <a href=https://github.com/pearlxcore/PS5PKGTool>PS5PKGTOOL</a> <a href=https://github.com/thanhsondev/PSVIETHOA-FPKG-Builder>PSVIETHOA-FPKG-Builder</a> <a href=https://github.com/knutwurst/ps5-ultrapack>ps5-ultrapack</a>
+</details>
+<br>
 
 2. [Download the GUI](https://github.com/biologyscience/ps5-exe-toolkit/releases/latest). Simply download the `.exe` and open it after placing it in a dedicated folder.
 
