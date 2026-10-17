@@ -228,7 +228,7 @@ def update_relinker(log):
         },
     )
     try:
-        log("Checking the latest GitHub release...")
+        log("Checking the latest Relinker release...")
         with urllib.request.urlopen(request, timeout=30) as response:
             release = json.load(response)
         if not isinstance(release, dict):
