@@ -1,4 +1,4 @@
-name: Build Windows executable
+name: Build GUI for Windows
 
 on:
   push:
