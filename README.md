@@ -14,8 +14,8 @@ PS5 EXE Toolkit is a basic GUI based wrapper to automate the conversion of extra
 <div align=center>
 ⚠️ <strong>READ</strong> ⚠️
 </div>
-<div align=center>
-If you just want to use your .pkg file to make a usuable .exe file to play games and do not want to read more, <a href=README_SIMPLIFIED.md>head over here</a>
+<div align=center style="margin: 10px 0">
+If you are not interested in reading lengthy docs and just want to use your .pkg file to make a playable .exe -> <a href=README_SIMPLIFIED.md>CLICK HERE!</a> <-
 </div>
 <div align=center>
 ⚠️ <strong>READ</strong> ⚠️
