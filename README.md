@@ -1,7 +1,7 @@
 <h1 align=center>PS5 EXE Toolkit</h1>
-<p align=center>
+<div align=center>
 <img src=assets/app-icon.png width=20%>
-</p>
+</div>
 
 ---
 
@@ -11,9 +11,15 @@ PS5 EXE Toolkit is a basic GUI based wrapper to automate the conversion of extra
 
 [Download the latest Windows build](https://github.com/biologyscience/ps5-exe-toolkit/releases/latest). Download the `.exe` and run it after placing it in a dedicated folder; there is no separate installer.
 
-<p align=center>
-⚠️ <strong>READ</strong> ⚠️ If you just want to use your .pkg file to make a usuable .exe file to play games and do not want to read more, <a href=README_SIMPLIFIED.md>head over here</a> ⚠️ <strong>READ</strong> ⚠️
-</p>
+<div align=center>
+⚠️ <strong>READ</strong> ⚠️
+</div>
+<div align=center>
+If you just want to use your .pkg file to make a usuable .exe file to play games and do not want to read more, <a href=README_SIMPLIFIED.md>head over here</a>
+</div>
+<div align=center>
+⚠️ <strong>READ</strong> ⚠️
+</div>
 
 ## Requirements
 
@@ -79,4 +85,4 @@ Open the executable from `dist/PS5 EXE Toolkit.exe`
 
 ---
 
-> Vibe coded with Claude and Copilot
+> Vibe coded using Claude and Copilot
