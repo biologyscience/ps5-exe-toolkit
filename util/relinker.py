@@ -305,6 +305,7 @@ def build_exe(folder, enabled, runner, game_name="game"):
         os.path.normcase("game.exe"),
         os.path.normcase("game.log.exe"),
     }
+    generated_paths = []
 
     optional = []
     for option in BUILD_OPTIONS:
@@ -329,6 +330,7 @@ def build_exe(folder, enabled, runner, game_name="game"):
             cwd=folder,
             runner=runner,
         )
+        generated_paths.append(os.path.join(folder, f"{executable_name}.exe"))
 
     run_cmd(
         [
@@ -341,6 +343,7 @@ def build_exe(folder, enabled, runner, game_name="game"):
         cwd=folder,
         runner=runner,
     )
+    generated_paths.append(os.path.join(folder, f"{executable_name}.log.exe"))
 
     app0 = os.path.join(folder, "app0")
     os.makedirs(app0, exist_ok=True)
@@ -503,3 +506,7 @@ def build_exe(folder, enabled, runner, game_name="game"):
                 os.path.join("libs", entry.name),
             )
     print("Copied libs/ beside app0/")
+
+    print("\n\nOpen this to start playing the game: ", end="", flush=True)
+    runner.add(os.path.abspath(generated_paths[0]), "link")
+    print()

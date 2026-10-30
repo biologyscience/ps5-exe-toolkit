@@ -1,11 +1,12 @@
 import ctypes
 import json
 import os
+import subprocess
 import sys
 import threading
 import traceback
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QUrl
 from PyQt6.QtGui import (
     QColor,
     QFont,
@@ -27,9 +28,10 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMessageBox,
-    QPlainTextEdit,
     QPushButton,
     QSizePolicy,
+    QTextBrowser,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -493,7 +495,7 @@ class ToolkitApp(QMainWindow):
                 font-family: "Ubuntu Medium";
                 font-weight: 500;
             }
-            QPlainTextEdit {
+            QTextBrowser {
                 font-family: "Ubuntu Mono";
                 background: transparent;
                 color: #d9dee7;
@@ -691,9 +693,11 @@ class ToolkitApp(QMainWindow):
         divider.setStyleSheet("color: #3b424e; background: #3b424e; max-height: 1px;")
         logs_layout.addWidget(divider)
 
-        self.output = QPlainTextEdit()
+        self.output = QTextBrowser()
         self.output.setReadOnly(True)
-        self.output.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+        self.output.setOpenLinks(False)
+        self.output.anchorClicked.connect(self._reveal_output_file)
+        self.output.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         logs_layout.addWidget(self.output, 1)
         page_layout.addWidget(logs_card, 1)
 
@@ -836,9 +840,29 @@ class ToolkitApp(QMainWindow):
         cursor.movePosition(QTextCursor.MoveOperation.End)
         text_format = QTextCharFormat()
         text_format.setForeground(QColor(self.LOG_COLORS.get(tag, self.LOG_COLORS["default"])))
+        if tag == "link":
+            text_format.setAnchor(True)
+            text_format.setAnchorHref(QUrl.fromLocalFile(text).toString())
+            text_format.setFontUnderline(True)
+            text_format.setForeground(QColor("#91a8f5"))
+            text_format.setToolTip("Click to show this executable in Explorer")
         cursor.insertText(text, text_format)
         self.output.setTextCursor(cursor)
         self.output.ensureCursorVisible()
+
+    def _reveal_output_file(self, url):
+        file_path = url.toLocalFile()
+        if not file_path or not os.path.isfile(file_path):
+            self._append(
+                f"Could not find executable: {file_path or url.toString()}\n", "err"
+            )
+            return
+        try:
+            subprocess.Popen(
+                f'explorer.exe /select,"{os.path.normpath(file_path)}"'
+            )
+        except OSError as error:
+            self._append(f"Could not show executable in Explorer: {error}\n", "err")
 
     def clear_output(self):
         self.output.clear()
