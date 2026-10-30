@@ -99,6 +99,38 @@ def save_state(folder=None, options=None):
         pass
 
 
+def load_game_metadata(folder):
+    sce_sys = os.path.join(folder, "sce_sys")
+    if not os.path.isdir(sce_sys):
+        return None, None, None
+
+    param_path = os.path.join(sce_sys, "param.json")
+    try:
+        with open(param_path, encoding="utf-8") as param_file:
+            data = json.load(param_file)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        return None, None, str(error)
+
+    if not isinstance(data, dict):
+        return None, None, "param.json must contain a JSON object"
+
+    title_id = data.get("titleId")
+    title_id = title_id.strip() if isinstance(title_id, str) else None
+
+    localized = data.get("localizedParameters")
+    title = None
+    if isinstance(localized, dict):
+        language = localized.get("defaultLanguage")
+        language_parameters = (
+            localized.get(language) if isinstance(language, str) else None
+        )
+        if isinstance(language_parameters, dict):
+            localized_title = language_parameters.get("titleName")
+            title = localized_title.strip() if isinstance(localized_title, str) else None
+
+    return title_id or None, title or None, None
+
+
 class StopRequested(BaseException):
     """Raised inside run_task() so ordinary exception handlers do not swallow Stop."""
 
@@ -156,7 +188,7 @@ class Runner:
         folder = os.path.join(folder, "")
         return self._launch(run_task, (folder,), f"run_task({folder!r})")
 
-    def start_build(self, folder, options):
+    def start_build(self, folder, options, game_name):
         folder = folder.strip()
         if not folder:
             return "Please select a folder first."
@@ -167,8 +199,8 @@ class Runner:
         }
         return self._launch(
             build_exe,
-            (folder, enabled, self),
-            f"build_exe({folder!r}, {sorted(enabled)})",
+            (folder, enabled, self, game_name),
+            f"build_exe({folder!r}, {sorted(enabled)}, {game_name!r})",
         )
 
     def start_update(self):
@@ -587,7 +619,8 @@ class ToolkitApp(QMainWindow):
         folder_form = QVBoxLayout(folder_group)
         folder_form.setContentsMargins(14, 12, 14, 12)
         folder_form.setSpacing(7)
-        folder_form.addWidget(self._label("Folder", "hint"))
+        self.folder_metadata_label = self._label("Folder", "hint")
+        folder_form.addWidget(self.folder_metadata_label)
         folder_row = QHBoxLayout()
         folder_row.setContentsMargins(0, 0, 0, 0)
         self.folder_entry = QLineEdit(self.state["folder"])
@@ -734,6 +767,7 @@ class ToolkitApp(QMainWindow):
 
     def _validate_folder(self, path):
         path = path.strip()
+        self._update_game_metadata(path)
         if not path.strip():
             folder_state = "empty"
         else:
@@ -748,6 +782,23 @@ class ToolkitApp(QMainWindow):
         self.folder_entry.style().polish(self.folder_entry)
         self.folder_entry.update()
         self._update_structure_status(path)
+
+    def _update_game_metadata(self, folder):
+        title_id, title, error = load_game_metadata(folder)
+        details = []
+        if title:
+            details.append(title)
+        if title_id:
+            details.append(title_id)
+
+        if details:
+            self.folder_metadata_label.setText(" | ".join(details))
+            self.folder_metadata_label.setToolTip(" | ".join(details))
+            self.folder_metadata_label.setStyleSheet("color: #a6d8b5;")
+        else:
+            self.folder_metadata_label.setText("Folder")
+            self.folder_metadata_label.setToolTip("")
+            self.folder_metadata_label.setStyleSheet("")
 
     def _update_structure_status(self, path):
         checks = {name: False for name in self.structure_items}
@@ -800,7 +851,11 @@ class ToolkitApp(QMainWindow):
 
     def start_build(self):
         self._save_state()
-        error = runner.start_build(self.folder_entry.text(), self._get_options())
+        title_id, title, _ = load_game_metadata(self.folder_entry.text().strip())
+        game_name = title or title_id or "game"
+        error = runner.start_build(
+            self.folder_entry.text(), self._get_options(), game_name
+        )
         if error:
             self._append(error + "\n", "warn")
 

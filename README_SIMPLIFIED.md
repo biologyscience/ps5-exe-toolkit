@@ -26,7 +26,7 @@ This step is optional but highly recommended, especially if you have a fpkg file
 
 This takes a bit of time according to the size of the game. Be paitent.
 
-6. Open the `game.exe` located at the folder you selected in step 3.
+6. Open the generated `.exe` located at the path mentioned at the final line of the output logs.
 
 7. Enjoy 🥳
 

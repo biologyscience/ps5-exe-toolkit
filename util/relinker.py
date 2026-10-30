@@ -21,6 +21,13 @@ BUILD_OPTIONS = [
         "arg": ["--module-dir", "Media/Modules", "--module-dir", "Media/Plugins"],
         "default": True,
     },
+
+    {
+        "id": "gui",
+        "label": "Logless .exe",
+        "arg": ["--windows-gui"],
+        "default": True,
+    }
 ]
 
 
@@ -275,8 +282,30 @@ def run_cmd(args, cwd, runner):
     return code
 
 
-def build_exe(folder, enabled, runner):
+def build_exe(folder, enabled, runner, game_name="game"):
     """Build an executable and assemble the resulting app0 directory."""
+    invalid_filename_chars = '<>:"/\\|?*'
+    executable_name = "".join(
+        "_"
+        if ord(character) < 32 or character in invalid_filename_chars
+        else character
+        for character in game_name
+    ).strip(" .")[:120].strip(" .")
+    if not executable_name:
+        executable_name = "game"
+    if executable_name.split(".", 1)[0].rstrip(" .").upper() in {
+        "CON", "PRN", "AUX", "NUL",
+        *(f"COM{number}" for number in range(1, 10)),
+        *(f"LPT{number}" for number in range(1, 10)),
+    }:
+        executable_name = f"_{executable_name}"
+    generated_executables = {
+        os.path.normcase(f"{executable_name}.exe"),
+        os.path.normcase(f"{executable_name}.log.exe"),
+        os.path.normcase("game.exe"),
+        os.path.normcase("game.log.exe"),
+    }
+
     optional = []
     for option in BUILD_OPTIONS:
         if option["id"] in enabled:
@@ -285,13 +314,29 @@ def build_exe(folder, enabled, runner):
                 optional.extend(argument.split())
             else:
                 optional.extend(argument)
+
+    if "gui" in enabled:
+        optional.remove('--windows-gui')
+        run_cmd(
+            [
+                find_program(PROGRAM),
+                "--windows",
+                "--windows-gui",
+                *optional,
+                os.path.join(folder, "eboot.bin"),
+                os.path.join(folder, f"{executable_name}.exe"),
+            ],
+            cwd=folder,
+            runner=runner,
+        )
+
     run_cmd(
         [
             find_program(PROGRAM),
             "--windows",
             *optional,
             os.path.join(folder, "eboot.bin"),
-            os.path.join(folder, "game.exe"),
+            os.path.join(folder, f"{executable_name}.log.exe"),
         ],
         cwd=folder,
         runner=runner,
@@ -353,7 +398,7 @@ def build_exe(folder, enabled, runner):
     with os.scandir(folder) as entries:
         for entry in entries:
             if (
-                os.path.normcase(entry.name) != os.path.normcase("game.exe")
+                os.path.normcase(entry.name) not in generated_executables
                 and os.path.normcase(entry.name) != os.path.normcase("app0")
                 and (entry.is_file() or entry.is_dir())
             ):
@@ -435,10 +480,8 @@ def build_exe(folder, enabled, runner):
     with os.scandir(folder) as entries:
         leftovers = [
             entry for entry in entries
-            if os.path.normcase(entry.name) not in {
-                os.path.normcase("game.exe"),
-                os.path.normcase("app0"),
-            }
+            if os.path.normcase(entry.name) not in generated_executables
+            and os.path.normcase(entry.name) != os.path.normcase("app0")
         ]
     for entry in leftovers:
         if entry.is_symlink() or entry.is_file():

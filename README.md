@@ -31,7 +31,7 @@ On first launch, it may download Relinker and its supporting libraries from [Any
 
 ## Convert SELF files
 
-1. Select the folder containing the extracted game files. The folder must contain `eboot.bin`, `sce_module/`, and `sce_sys/`; the GUI marks each item green when present and red when missing.
+1. Select the folder containing the extracted game files. The folder must contain `eboot.bin`, `sce_module/`, and `sce_sys/`; the GUI marks each item green when present and red when missing. When `sce_sys/param.json` contains game metadata, the title and title ID appear above the folder location.
 2. Click **unSELF**.
 3. Follow the conversion results in the **Output** panel.
 
@@ -45,7 +45,7 @@ The converter searches the selected folder and its subfolders, recognises files 
 2. Choose whether to include the Media folder. This option is enabled by default, and the GUI remembers your choice.
 3. Click **Build .exe** and monitor progress in the **Output** panel.
 
-The build uses Relinker to create `game.exe`, assembles the game files under `app0/`, and copies supporting libraries into a sibling `libs/` directory. Existing items in `app0/` take precedence: missing contents of matching directories are merged, while conflicts are skipped. Copy progress is reported for each root-level item.
+The build names its executable outputs from the game title in `sce_sys/param.json`, falling back to the title ID and then `game`. It assembles the game files under `app0/` and copies supporting libraries into a sibling `libs/` directory. Existing items in `app0/` take precedence: missing contents of matching directories are merged, while conflicts are skipped. Copy progress is reported for each root-level item.
 
 > **Important:** Building rearranges and removes files in the selected game
 > folder as it assembles `app0/`. Back up the folder before building. Do not

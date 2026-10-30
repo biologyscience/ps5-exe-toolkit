@@ -94,5 +94,5 @@ jobs:
         with:
           prerelease: true
           tag_name: relinker-and-libs_${{ env.BUILD_TIMESTAMP }}
-          name: AnyPS5 Tools [Windows Build ${{ env.BUILD_TIMESTAMP }}}
+          name: AnyPS5 Tools [Windows Build ${{ env.BUILD_TIMESTAMP }}]
           files: relinker-and-libs_${{ env.BUILD_TIMESTAMP }}.zip
