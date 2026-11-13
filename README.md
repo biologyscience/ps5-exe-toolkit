@@ -1,10 +1,7 @@
 <h1 align=center>PS5 EXE Toolkit</h1>
 
-<div align=center>
-<img src=assets/app-icon.png width=20%>
-</div>
-
----
+| <img src=assets/app-icon.png> | <img src=assets/UI.png> |
+| :-: | :-: |
 
 PS5 EXE Toolkit is a basic GUI based wrapper to automate the conversion of extracted PS5 pkg files to a native windows executable using [Relinker from AnyPS5](https://github.com/boykopovar/AnyPS5).
 
@@ -14,15 +11,12 @@ PS5 EXE Toolkit is a basic GUI based wrapper to automate the conversion of extra
 
 <div align=center>
 ⚠️ <strong>READ</strong> ⚠️
-</div>
-<div align=center style="margin: 15px 0">
+<br>
+<br>
 Not interested in reading lengthy docs? Want to go from .pkg to .exe quick? -> <a href=README_SIMPLIFIED.md>CLICK HERE!</a> <-
-</div>
-<div align=center>
+<br>
+<br>
 ⚠️ <strong>READ</strong> ⚠️
-</div>
-<div align=center style="margin: 20px 0">
-<img src=assets/UI.png>
 </div>
 
 ## Requirements
