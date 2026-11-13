@@ -20,8 +20,9 @@ Not interested in reading lengthy docs? Want to go from .pkg to .exe quick? -> <
 </div>
 <div align=center>
 ⚠️ <strong>READ</strong> ⚠️
-
-<img src=assets/UI.png style="margin: 20px 0">
+</div>
+<div align=center style="margin: 20px 0">
+<img src=assets/UI.png>
 </div>
 
 ## Requirements
