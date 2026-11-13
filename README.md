@@ -21,7 +21,7 @@ Not interested in reading lengthy docs? Want to go from .pkg to .exe quick? -> <
 <div align=center>
 ⚠️ <strong>READ</strong> ⚠️
 
-<img src=assets/UI.png style="margin-top: 20px">
+<img src=assets/UI.png style="margin: 20px 0">
 </div>
 
 ## Requirements
