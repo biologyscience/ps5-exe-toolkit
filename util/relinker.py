@@ -153,6 +153,7 @@ def update_relinker(log):
                 if isinstance(asset, dict)
                 and isinstance(asset.get("name"), str)
                 and asset["name"].lower().startswith("prx-windows-")
+                and "unpatched" not in asset["name"].lower()
                 and asset["name"].lower().endswith(".zip")
             ),
             None,
